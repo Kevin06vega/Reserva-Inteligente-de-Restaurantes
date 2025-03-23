@@ -1,0 +1,86 @@
+services:
+  # 🔸 Base de datos para la API
+  db:
+    image: postgres:15
+    container_name: api-postgres
+    environment:
+      POSTGRES_DB: db123
+      POSTGRES_USER: user123
+      POSTGRES_PASSWORD: password123
+    volumes:
+      - api_postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  # 🔹 API Node.js (Express + Keycloak)
+  app:
+    build:
+      context: ../api
+    container_name: my-node-app
+    ports:
+      - "13000:3000"
+    environment:
+      DB_HOST: db
+      DB_USER: user123
+      DB_PASSWORD: password123
+      DB_NAME: db123
+      DB_PORT: 5432
+      KEYCLOAK_CLIENT_ID: restaurante-api           # 👈 Igual que el Client ID en Keycloak
+      KEYCLOAK_REALM: restaurante-app
+      KEYCLOAK_SERVER_URL: http://keycloak:8080     # 👈 Dirección interna desde Docker
+      KEYCLOAK_CLIENT_SECRET: HgpnBid8C8VZXBKWpG9PVFmsBWq8XdAO # 🔐 Reemplaza esto con el client secret real
+    depends_on:
+      - db
+      - keycloak
+    networks:
+      - backend
+    extra_hosts:
+      - "localhost:host-gateway"
+
+  # 🔸 Base de datos para Keycloak
+  postgres:
+    image: postgres:15
+    container_name: keycloak-postgres
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak_password
+    volumes:
+      - keycloak_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+
+  # 🔹 Keycloak Server
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak_password
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin_password
+      KC_HOSTNAME_STRICT: false
+      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_HTTP_ENABLED: true
+    command: start-dev
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+
+volumes:
+  api_postgres_data:
+  keycloak_postgres_data:
+
+networks:
+  backend:
